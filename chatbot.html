@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decision Tree Chatbot</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback } = React;
+
+        const DecisionTreeChatbot = () => {
+            // Sample YAML for demonstration
+            const sampleYaml = `node1:
+    question: "Is this request for new software?"
+    options:
+        yes: node2
+        no: node3
+
+node2:
+    question: "Is the software cost over $1000?"
+    options:
+        yes: node4
+        no: node5
+
+node3:
+    question: "Is this a hardware request?"
+    options:
+        yes: node6
+        no: node7
+
+node4:
+    verdict: "Requires CFO approval and security review"
+
+node5:
+    verdict: "Can be approved by IT manager"
+
+node6:
+    question: "Is the hardware cost over $500?"
+    options:
+        yes: node8
+        no: node9
+
+node7:
+    verdict: "Please clarify the type of request"
+
+node8:
+    verdict: "Requires manager approval and procurement review"
+
+node9:
+    verdict: "Can be approved by direct supervisor"`;
+
+            const parseYaml = (yamlText) => {
+                try {
+                    const lines = yamlText.split('\n');
+                    const result = {};
+                    let currentKey = null;
+                    let currentObj = null;
+                    let inOptions = false;
+
+                    for (let line of lines) {
+                        const originalLine = line;
+                        line = line.trim();
+                        if (!line) continue;
+
+                        // Check if this is a new node (no indentation)
+                        if (originalLine.match(/^[a-zA-Z0-9_]+:/) && !originalLine.startsWith(' ')) {
+                            currentKey = line.slice(0, -1);
+                            currentObj = {};
+                            result[currentKey] = currentObj;
+                            inOptions = false;
+                        } else if (line.startsWith('question:')) {
+                            currentObj.question = line.substring(9).trim().replace(/['"]/g, '');
+                            inOptions = false;
+                        } else if (line.startsWith('verdict:')) {
+                            currentObj.verdict = line.substring(8).trim().replace(/['"]/g, '');
+                            inOptions = false;
+                        } else if (line === 'options:') {
+                            currentObj.options = {};
+                            inOptions = true;
+                        } else if (inOptions && line.includes(':') && originalLine.startsWith(' ')) {
+                            const [key, value] = line.split(':').map(s => s.trim());
+                            currentObj.options[key] = value;
+                        }
+                    }
+                    console.log('Final parsed result:', result);
+                    return result;
+                } catch (error) {
+                    throw new Error('Failed to parse YAML: ' + error.message);
+                }
+            };
+
+            // Initialize with sample data
+            const [decisionTree, setDecisionTree] = useState(() => {
+                try {
+                    const parsed = parseYaml(sampleYaml);
+                    console.log('Initial parsed data:', parsed);
+                    return parsed;
+                } catch (error) {
+                    console.error('Error loading initial data:', error);
+                    return null;
+                }
+            });
+            const [currentNode, setCurrentNode] = useState('node1');
+            const [history, setHistory] = useState([]);
+            const [startNode, setStartNode] = useState('node1');
+
+            const loadSampleData = () => {
+                try {
+                    const parsed = parseYaml(sampleYaml);
+                    console.log('Parsed data:', parsed); // Debug
+                    setDecisionTree(parsed);
+                    setCurrentNode(startNode);
+                    setHistory([]);
+                } catch (error) {
+                    console.error('Error loading sample data:', error);
+                    alert('Error loading sample data: ' + error.message);
+                }
+            };
+
+            const handleFileUpload = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const parsed = parseYaml(e.target.result);
+                        setDecisionTree(parsed);
+                        
+                        const firstNode = Object.keys(parsed)[0];
+                        setStartNode(firstNode);
+                        setCurrentNode(firstNode);
+                        setHistory([]);
+                    } catch (error) {
+                        alert('Error parsing YAML file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleOptionClick = (nextNode) => {
+                setHistory([...history, { node: currentNode, choice: nextNode }]);
+                setCurrentNode(nextNode);
+            };
+
+            const goBack = () => {
+                if (history.length === 0) return;
+                
+                const newHistory = [...history];
+                const lastStep = newHistory.pop();
+                setHistory(newHistory);
+                setCurrentNode(lastStep.node);
+            };
+
+            const restart = () => {
+                setCurrentNode(startNode);
+                setHistory([]);
+            };
+
+            const getCurrentNodeData = () => {
+                const data = decisionTree && currentNode ? decisionTree[currentNode] : null;
+                console.log('Current node:', currentNode, 'Node data:', data);
+                return data;
+            };
+
+            const nodeData = getCurrentNodeData();
+
+            return React.createElement('div', { className: "max-w-2xl mx-auto p-6 bg-white min-h-screen" },
+                React.createElement('div', { className: "bg-blue-50 rounded-lg p-6 mb-6" },
+                    React.createElement('h1', { className: "text-2xl font-bold text-blue-900 mb-4" }, "Decision Tree Chatbot"),
+                    
+                    React.createElement('div', { className: "flex gap-2 flex-wrap" },
+                        React.createElement('button', {
+                            onClick: goBack,
+                            disabled: history.length === 0,
+                            className: "flex items-center gap-2 bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        }, "← Back"),
+                        
+                        React.createElement('button', {
+                            onClick: restart,
+                            className: "flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                        }, "🔄 Restart"),
+
+                        React.createElement('label', { 
+                            className: "flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg cursor-pointer hover:bg-green-700 transition-colors" 
+                        },
+                            "📁 Upload Your YAML",
+                            React.createElement('input', {
+                                type: "file",
+                                accept: ".yaml,.yml,.txt",
+                                onChange: handleFileUpload,
+                                className: "hidden"
+                            })
+                        )
+                    )
+                ),
+
+                decisionTree && nodeData && React.createElement('div', { className: "bg-white border border-gray-200 rounded-lg p-6 shadow-sm" },
+                    // Debug info
+                    React.createElement('div', { className: "mb-4 p-2 bg-yellow-100 text-xs" },
+                        React.createElement('div', null, `Current Node: ${currentNode}`),
+                        React.createElement('div', null, `Node Data: ${JSON.stringify(nodeData)}`),
+                        React.createElement('div', null, `Options: ${JSON.stringify(nodeData?.options)}`)
+                    ),
+
+                    nodeData.question ? 
+                        React.createElement('div', null,
+                            React.createElement('h2', { className: "text-xl font-semibold text-gray-800 mb-4" }, nodeData.question),
+                            
+                            React.createElement('div', { className: "space-y-3" },
+                                Object.entries(nodeData.options || {}).map(([option, nextNode]) =>
+                                    React.createElement('button', {
+                                        key: option,
+                                        onClick: () => handleOptionClick(nextNode),
+                                        className: "w-full text-left p-4 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg transition-colors"
+                                    },
+                                        React.createElement('span', { className: "font-medium text-gray-800" }, option)
+                                    )
+                                )
+                            )
+                        ) :
+                        nodeData.verdict ?
+                            React.createElement('div', { className: "text-center" },
+                                React.createElement('h2', { className: "text-xl font-semibold text-green-800 mb-4" }, "Decision"),
+                                React.createElement('div', { className: "bg-green-50 border border-green-200 rounded-lg p-4" },
+                                    React.createElement('p', { className: "text-green-800 font-medium" }, nodeData.verdict)
+                                )
+                            ) :
+                            React.createElement('div', { className: "text-center text-red-600" },
+                                React.createElement('p', null, "Error: Invalid node data")
+                            )
+                ),
+
+                history.length > 0 && React.createElement('div', { className: "mt-6 bg-gray-50 rounded-lg p-4" },
+                    React.createElement('h3', { className: "font-semibold text-gray-700 mb-2" }, "Decision Path:"),
+                    React.createElement('div', { className: "text-sm text-gray-600" },
+                        history.map((step, index) =>
+                            React.createElement('span', { key: index },
+                                index > 0 && ' → ',
+                                React.createElement('span', { className: "font-medium" }, step.choice)
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(DecisionTreeChatbot));
+    </script>
+</body>
+</html>
